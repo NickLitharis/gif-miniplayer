@@ -10,6 +10,7 @@ gif-miniplayer/
 ├── Run-GifMiniPlayer.bat  double-click launcher
 ├── demo-a.gif             }
 ├── demo-b.gif             } two 10-frame demo GIFs to flip between
+├── check.ps1              static invariants (run after every edit)
 └── README.md
 ```
 

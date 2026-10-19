@@ -58,3 +58,12 @@ local source. A mismatch fails the run — a stale build can never be mistaken f
 - **`createdNew` is the wrong question for single-instance.** A named mutex outlives its owner
   and `createdNew` then reports false forever, silently blocking every start. Take ownership
   with `WaitOne(0)` and treat `AbandonedMutexException` as success.
+
+## Requirements
+
+- **Host:** `git`, `python3`, `jq`, `curl`, `zip`, and PowerShell 7 for the static gate
+  (`~/.local/share/pwsh/pwsh -NoProfile -File check.ps1`).
+- **Guest:** the poller running (`a.bat` once; it reinstalls itself at logon) and VMware Tools.
+- **One server per machine:** the guest's agent talks to `192.168.103.1:8001`, so only one
+  checkout may run `vm-server.py` at a time. A second checkout's `ship.sh` will reuse the
+  running server rather than start a competing one.

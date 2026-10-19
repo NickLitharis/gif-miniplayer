@@ -3,7 +3,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const OUT = '/home/marocos/win11-vm/uploads';
+const OUT = require('path').join(__dirname, 'uploads');
 fs.mkdirSync(OUT, { recursive: true });
 
 http.createServer((req, res) => {

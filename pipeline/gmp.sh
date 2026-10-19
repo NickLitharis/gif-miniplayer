@@ -6,7 +6,7 @@
 #   ./gmp.sh probe4            # run serve/probe4.ps1 with no argument
 set -uo pipefail
 
-HERE="/home/marocos/win11-vm"
+HERE="$(cd "$(dirname "$0")" && pwd)"
 SERVE="$HERE/serve"
 UP="$HERE/uploads"
 HOST_IP=192.168.103.1

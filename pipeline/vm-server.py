@@ -12,8 +12,8 @@ import time
 import urllib.parse
 import http.server
 
-SERVE = "/home/marocos/win11-vm/serve"
-UPLOADS = "/home/marocos/win11-vm/uploads"
+SERVE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "serve")
+UPLOADS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
 BIND = ("192.168.103.1", 8001)
 
 os.makedirs(UPLOADS, exist_ok=True)

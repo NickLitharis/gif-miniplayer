@@ -9,8 +9,8 @@
 # this script compares it with the local source and fails loudly on a mismatch.
 set -uo pipefail
 
-PROJ="/home/marocos/gif-miniplayer"
-VM="/home/marocos/win11-vm"
+PROJ="$(cd "$(dirname "$0")/.." && pwd)"
+VM="$(cd "$(dirname "$0")" && pwd)"
 SERVE="$VM/serve"
 UP="$VM/uploads"
 HOST_IP=192.168.103.1

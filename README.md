@@ -5,6 +5,7 @@ feel, but for animated GIFs. Two files, no install, no admin, no build step.
 
 ```
 gif-miniplayer/
+├── pipeline/              the VM test harness (see pipeline/README-pipeline.md)
 ├── GifMiniPlayer.ps1      the whole app
 ├── Run-GifMiniPlayer.bat  double-click launcher
 ├── demo-a.gif             }

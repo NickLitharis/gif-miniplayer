@@ -1,8 +1,8 @@
 # Shipping to the VM and getting a verdict back
 
 ```
-you edit  ~/gif-miniplayer/GifMiniPlayer.ps1
-   └─ ./ship.sh            (or ./ship.sh --watch)
+you edit  GifMiniPlayer.ps1          (repo root)
+   └─ ./pipeline/ship.sh    (or --watch)
         ├─ zips exactly what ships, drops it on the host file server
         ├─ queues "build.ps1 <build-id>" for the guest
         ├─ guest: deploy -> kill old instances -> launch -> smoke test -> upload evidence
@@ -13,10 +13,10 @@ you edit  ~/gif-miniplayer/GifMiniPlayer.ps1
 
 | File | Runs on | Role |
 |---|---|---|
-| `ship.sh` | host | build · queue · wait · report · `--watch` on source hash · `--check` |
-| `serve/agent.ps1` | guest | polls for commands; `-Install` registers it at logon (survives reboot); self-updates |
-| `serve/build.ps1` | guest | the ONE smoke test: deploy, launch, assert, screenshot, upload, clean up |
-| `vm-server.py` | host | serves the bundle on `192.168.103.1:8001`, receives uploads into `uploads/` |
+| `pipeline/ship.sh` | host | build · queue · wait · report · `--watch` on source hash · `--check` |
+| `pipeline/serve/agent.ps1` | guest | polls for commands; `-Install` registers it at logon (survives reboot); self-updates |
+| `pipeline/serve/build.ps1` | guest | the ONE smoke test: deploy, launch, assert, screenshot, upload, clean up |
+| `pipeline/vm-server.py` | host | serves the bundle on `192.168.103.1:8001`, receives uploads into `uploads/` |
 
 ## The one-time setup (already done)
 

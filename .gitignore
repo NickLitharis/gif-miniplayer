@@ -1,8 +1,8 @@
-# ---- build outputs (regenerated) ----
-*.zip
+# ---- generated builds (rebuilt by pipeline/ship.sh and make-exe.ps1) ----
 *.exe
+*.zip
 
-# ---- pipeline runtime state ----
+# ---- pipeline runtime state (guest evidence, never source) ----
 pipeline/uploads/
 pipeline/drop/
 pipeline/server.log
@@ -10,6 +10,12 @@ pipeline/serve/cmd.txt
 pipeline/serve/*.log
 
 # ---- editor / OS noise ----
+.vscode/
+.idea/
+__pycache__/
+*.tmp
+*.bak
 *~
 .DS_Store
 Thumbs.db
+desktop.ini

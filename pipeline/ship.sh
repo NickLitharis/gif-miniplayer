@@ -41,7 +41,7 @@ ship_once() {
 
   # package exactly what the plan says ships
   ( cd "$PROJ" && rm -f gif-miniplayer.zip && zip -q gif-miniplayer.zip \
-      GifMiniPlayer.ps1 Run-GifMiniPlayer.bat README.md demo-a.gif demo-b.gif ) || die "zip failed"
+      GifMiniPlayer.ps1 Run-GifMiniPlayer.bat README.md demo-a.gif demo-b.gif logo.png check.ps1 ) || die "zip failed"
   cp "$PROJ/gif-miniplayer.zip" "$SERVE/gif-miniplayer.zip"
 
   ensure_server
@@ -94,6 +94,37 @@ ship_once() {
   log "screenshots + result: $UP/$build-*.png  $UP/$build-result.json"
   [[ -f "$UP/$build-ui.txt" ]] && log "control tree: $UP/$build-ui.txt"
   [[ -f "$UP/$build-error.log" ]] && { log "app error.log:"; sed -n '1,6p' "$UP/$build-error.log"; }
+
+  # The smoke test proves the build; the user-flow test proves the journey a person takes.
+  # It runs on the same bundle, and reports the SHA it ran so a standalone run cannot pass
+  # by testing yesterday's zip.
+  if [[ "$pass" == "true" ]]; then
+    log "smoke test passed - running the user-flow test on the same bundle"
+    rm -f "$UP/userflow-summary.txt" "$UP/userflow-result.json" "$UP"/uf-*.png
+    printf '%s userflow.ps1\n' "$build-uf" > "$SERVE/cmd.txt"
+    for i in $(seq 1 60); do
+      [[ -f "$UP/userflow-summary.txt" ]] && break
+      sleep 2
+    done
+    rm -f "$SERVE/cmd.txt"
+    if [[ -f "$UP/userflow-summary.txt" ]]; then
+      echo
+      sed -n '1,40p' "$UP/userflow-summary.txt"
+      echo
+      local uf_sha
+      uf_sha=$(sed -n 's/.*sha256=\([0-9a-f]\{64\}\).*/\1/p' "$UP/userflow-summary.txt" | head -1)
+      if [[ "$uf_sha" == "$sha_local" ]]; then
+        log "user flow ran the same source: sha matches (${sha_local:0:12})"
+      else
+        log "USER-FLOW SHA MISMATCH or missing — the flow tested different code ($uf_sha)"
+        pass=false
+      fi
+      grep -q '^FAIL' "$UP/userflow-summary.txt" && pass=false
+    else
+      log "no user-flow result within 120s"
+      pass=false
+    fi
+  fi
 
   if [[ "$pass" == "true" ]]; then log "VERDICT: PASS"; return 0; else log "VERDICT: FAIL"; return 1; fi
 }

@@ -79,8 +79,18 @@ while ($true) {
                     Unblock-File -LiteralPath $local -ErrorAction SilentlyContinue
                     $cmdArgs = @('-NoProfile','-ExecutionPolicy','Bypass','-File',$local)
                     if ($extra) { $cmdArgs += ($extra -split '\s+') }
-                    $out = & (Get-Process -Id $PID).Path @cmdArgs 2>&1 | Out-String
-                    Note "done $id"
+                    # Redirect to files and wait with a timeout: a hung test (or a surviving
+                    # child holding the pipe) must not wedge the agent forever.
+                    $o = Join-Path $dir "$id.stdout.txt"; $e = Join-Path $dir "$id.stderr.txt"
+                    $p = Start-Process -FilePath (Get-Process -Id $PID).Path -ArgumentList $cmdArgs `
+                        -NoNewWindow -PassThru -RedirectStandardOutput $o -RedirectStandardError $e
+                    $finished = $p.WaitForExit(300000)
+                    if (-not $finished) { & taskkill.exe /T /F /PID $p.Id | Out-Null }
+                    $out = if ($finished) { '' } else { "TIMEOUT after 300s`r`n" }
+                    $out += (Get-Content -LiteralPath $o -Raw -ErrorAction SilentlyContinue) +
+                            (Get-Content -LiteralPath $e -Raw -ErrorAction SilentlyContinue)
+                    Remove-Item -LiteralPath $o, $e -Force -ErrorAction SilentlyContinue
+                    Note "done $id (exit $(if ($finished) { $p.ExitCode } else { 'timeout' }))"
                     Post "agent-out-$id.txt" "[$id] $script $extra`r`n$out"
                 } catch {
                     Note "error $id : $_"

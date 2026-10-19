@@ -64,95 +64,14 @@ function Upload-Results {
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
-Add-Type -ReferencedAssemblies System.Drawing @'
-using System;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Collections.Generic;
-public class BT {
-    public delegate bool EnumProc(IntPtr h, IntPtr p);
-    [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
-    [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc cb, IntPtr p);
-    [DllImport("user32.dll")] public static extern bool EnumChildWindows(IntPtr parent, EnumProc cb, IntPtr p);
-    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
-    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, IntPtr pid);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassNameW(IntPtr h, StringBuilder s, int n);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowTextW(IntPtr h, StringBuilder s, int n);
-    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
-    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
-    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
-    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr h);
-    [DllImport("user32.dll")] public static extern IntPtr SetFocus(IntPtr h);
-    [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
-    [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint a, uint b, bool attach);
-    public static string WantTitle = "GIF Mini Player";
-    public static IntPtr FindApp(out uint pidOut, out RECT rect, out bool vis) {
-        IntPtr found = IntPtr.Zero; uint fp = 0; RECT fr = new RECT(); bool fv = false;
-        EnumWindows((h, p) => {
-            var c = new StringBuilder(256); GetClassNameW(h, c, 256);
-            if (!c.ToString().StartsWith("WindowsForms")) return true;
-            var t = new StringBuilder(256); GetWindowTextW(h, t, 256);
-            if (!t.ToString().StartsWith(WantTitle)) return true;
-            RECT r; GetWindowRect(h, out r);
-            if ((r.Right - r.Left) < 100) return true;
-            uint pid; GetWindowThreadProcessId(h, out pid);
-            found = h; fp = pid; fr = r; fv = IsWindowVisible(h); return false;
-        }, IntPtr.Zero);
-        pidOut = fp; rect = fr; vis = fv;
-        return found;
-    }
-    public static string[] Children(IntPtr parent) {
-        var list = new List<string>();
-        EnumChildWindows(parent, (h, p) => {
-            var c = new StringBuilder(256); GetClassNameW(h, c, 256);
-            var t = new StringBuilder(256); GetWindowTextW(h, t, 256);
-            RECT r; GetWindowRect(h, out r);
-            list.Add(string.Format("{0}\t{1}\t{2}x{3}\t{4},{5}", c, t, r.Right - r.Left, r.Bottom - r.Top, r.Left, r.Top));
-            return true;
-        }, IntPtr.Zero);
-        return list.ToArray();
-    }
-    [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
-    [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h, out RECT r);
-
-    // Capture THIS window's own content -- independent of z-order, other windows and layering.
-    public static bool Capture(IntPtr hwnd, string path, int width, int height) {
-        using (var bmp = new System.Drawing.Bitmap(width, height))
-        using (var g = System.Drawing.Graphics.FromImage(bmp)) {
-            IntPtr hdc = g.GetHdc();
-            bool ok = PrintWindow(hwnd, hdc, 2);   // PW_RENDERFULLCONTENT
-            g.ReleaseHdc(hdc);
-            if (!ok) return false;
-            bmp.Save(path, System.Drawing.Imaging.ImageFormat.Png);
-            return true;
-        }
-    }
-    [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
-    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
-    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
-    [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
-    [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
-    public static void Click(int x, int y) {
-        SetCursorPos(x, y);
-        System.Threading.Thread.Sleep(80);
-        mouse_event(0x0002, 0, 0, 0, UIntPtr.Zero);   // LEFTDOWN
-        System.Threading.Thread.Sleep(80);
-        mouse_event(0x0004, 0, 0, 0, UIntPtr.Zero);   // LEFTUP
-        System.Threading.Thread.Sleep(120);
-    }
-    public static bool Focus(IntPtr target) {
-        IntPtr fg = GetForegroundWindow();
-        uint fgT = fg == IntPtr.Zero ? 0 : GetWindowThreadProcessId(fg, IntPtr.Zero);
-        uint myT = GetCurrentThreadId();
-        bool att = false;
-        if (fgT != 0 && fgT != myT) att = AttachThreadInput(myT, fgT, true);
-        BringWindowToTop(target); SetForegroundWindow(target); SetFocus(target);
-        if (att) AttachThreadInput(myT, fgT, false);
-        return GetForegroundWindow() == target;
-    }
+$lib = Join-Path $PSScriptRoot 'win.ps1'
+(New-Object Net.WebClient).DownloadFile("$H/win.ps1", $lib)
+. $lib
+if (-not ('BT' -as [type])) {
+    Assert 'helper type compiles' $false 'win.ps1 did not load'
+    Upload-Results
+    return
 }
-'@
 
 # ---- 1. deploy -----------------------------------------------------------------
 Log "build=$Build dir=$dir"
@@ -222,7 +141,7 @@ if ($h1 -ne [IntPtr]::Zero -and $p1 -le 0) {
     Log 'ignoring a window with no resolvable pid (mid-destroy)'
     $h1 = [IntPtr]::Zero
 }
-if ($hwnd -eq [IntPtr]::Zero -and $h1 -ne [IntPtr]::Zero) {
+if ($h1 -ne [IntPtr]::Zero) {
     Assert 'no stale instance before launch' $false ("pid=$p1 still owns a player window (it may be hidden in the tray) and it was started elevated, so this session can neither kill it nor post WM_CLOSE to it. Right-click its TRAY icon -> Exit, or reboot the VM; the agent comes back by itself.")
     Upload-Results
     Write-Host 'ABORTED: unevictable stale player window'
@@ -236,7 +155,6 @@ if (Test-Path -LiteralPath $errLog) { Remove-Item -LiteralPath $errLog -Force }
 # ---- 3. launch with both demo gifs --------------------------------------------
 $gifs = @(Get-ChildItem $dir -Filter 'demo-*.gif' | Sort-Object Name | ForEach-Object FullName)
 $script:Instance = "t$Build"
-$env:GMP_INSTANCE = $script:Instance
 $env:GMP_INSTANCE = $script:Instance
 $proc = Start-Process -FilePath 'powershell.exe' -PassThru -WindowStyle Hidden -ArgumentList (@(
     '-STA','-NoProfile','-ExecutionPolicy','Bypass','-File',$app) + $gifs)
@@ -253,7 +171,7 @@ for ($i = 0; $i -lt 20; $i++) {
     Start-Sleep -Milliseconds 500
     if (Test-Path -LiteralPath $instanceFile) {
         try { $info = Get-Content -LiteralPath $instanceFile -Raw | ConvertFrom-Json } catch { }
-        if ($false -and $info -and $info.hwnd) { break }
+        if ($info -and $info.hwnd) { break }
     }
 }
 $appPid2 = 0; $rect = New-Object BT+RECT; $vis = $false
@@ -268,7 +186,7 @@ if ($info -and $info.hwnd) {
     $hwnd = [BT]::FindApp([ref]$appPid2, [ref]$rect, [ref]$vis)
 }
 $winW = $rect.Right - $rect.Left; $winH = $rect.Bottom - $rect.Top
-Log "window hwnd=0x$($hwnd.ToString('X')) pid=$appPid2 visible=$vis ${w}x${h}"
+Log "window hwnd=0x$($hwnd.ToString('X')) pid=$appPid2 visible=$vis ${winW}x${winH}"
 Assert 'window exists' (($hwnd -is [IntPtr]) -and ($hwnd -ne [IntPtr]::Zero)) "hwnd=0x$($hwnd.ToString('X')) owner pid=$appPid2"
 Assert 'owner process alive' ($null -ne (Get-Process -Id $appPid2 -ErrorAction SilentlyContinue)) "pid=$appPid2"
 Assert 'window visible' $vis ''
@@ -280,27 +198,27 @@ if ($hwnd -ne [IntPtr]::Zero) { $children = [BT]::Children($hwnd) }
 $buttons = $children | Where-Object { $_ -match 'BUTTON' }
 $uiText = ($children -join "`r`n")
 Post 'ui.txt' $uiText
-$zeroHeight = @($buttons | Where-Object { ($_ -split "`t")[2] -match '^\d+x0$' })
+$zeroHeight = @($buttons | Where-Object { ($_ -split "`t")[3] -match '^\d+x0$' })
 Log "buttons=$($buttons.Count) zero-height=$($zeroHeight.Count)"
-Assert 'six buttons' ($buttons.Count -eq 6) "found $($buttons.Count)"
+Assert 'eight buttons' ($buttons.Count -eq 8) "found $($buttons.Count)"
 Assert 'no zero-height buttons' ($zeroHeight.Count -eq 0) "$($zeroHeight.Count) with height 0"
 
 # Identify buttons by POSITION, not by label: the labels are Unicode transport glyphs now,
 # and the console capture mangles them. Left-to-right order is part of the design.
 function Btn-Info($line) {
     $f = $line -split "`t"
-    $r = @{ Text = $f[1]; W = 0; H = 0; X = 0; Y = 0; Visible = $true }
-    if ($f[2] -match '^(\d+)x(\d+)$')   { $r.W = [int]$matches[1]; $r.H = [int]$matches[2] }
-    if ($f[3] -match '^(-?\d+),(-?\d+)$') { $r.X = [int]$matches[1]; $r.Y = [int]$matches[2] }
+    $r = @{ Hwnd = [int64]$f[0]; Text = $f[2]; W = 0; H = 0; X = 0; Y = 0; Visible = $true }
+    if ($f[3] -match '^(\d+)x(\d+)$')   { $r.W = [int]$matches[1]; $r.H = [int]$matches[2] }
+    if ($f[4] -match '^(-?\d+),(-?\d+)$') { $r.X = [int]$matches[1]; $r.Y = [int]$matches[2] }
     return [pscustomobject]$r
 }
 $bi = @($buttons | ForEach-Object { Btn-Info $_ } | Sort-Object X)
 foreach ($b in $bi) { Log ("button '{0}' at {1},{2} size {3}x{4}" -f $b.Text, $b.X, $b.Y, $b.W, $b.H) }
 
-Assert 'buttons ordered transport-first' ($bi.Count -eq 6 -and $bi[0].X -lt $bi[1].X -and $bi[1].X -lt $bi[2].X) ($bi | ForEach-Object { $_.X }) -join ','
+Assert 'buttons ordered transport-first' ($bi.Count -eq 8 -and $bi[0].X -lt $bi[1].X -and $bi[1].X -lt $bi[2].X) ($bi | ForEach-Object { $_.X }) -join ','
 Assert 'buttons sit below the gif' ($bi[0].Y -ge ($rect.Top + $winW - 4)) "y=$($bi[0].Y) gif-bottom=$($rect.Top + $winW)"
-Assert 'bar buttons are square-ish' (($bi | Where-Object { $_.W -lt 18 -or $_.H -lt 18 }).Count -eq 0) ($bi | ForEach-Object { "$($_.W)x$($_.H)" }) -join ' '
-Assert 'play glyph present' ([bool]$bi[1].Text) $bi[1].Text
+Assert 'bar buttons are finger-sized' (($bi | Where-Object { $_.W -lt 16 -or $_.H -lt 16 }).Count -eq 0) ($bi | ForEach-Object { "$($_.W)x$($_.H)" }) -join ' '
+Assert 'play control is second from the left' ($bi[1].W -ge 30) "w=$($bi[1].W)"
 
 # ---- 5. behaviour -------------------------------------------------------------
 function Shot($name) {
@@ -339,6 +257,29 @@ function Corner($path) {
     $px = $i.GetPixel([int]($winW - 40), [int]($winH - 60))
     $i.Dispose(); return "$($px.R),$($px.G),$($px.B)"
 }
+# Bottom-centre of the window: the control bar, clear of buttons and rounded corners.
+function Bar-Pixel($path) {
+    if (-not $path -or -not (Test-Path -LiteralPath $path)) { return 'ERR:no-file' }
+    try { $i = [System.Drawing.Bitmap]::FromFile($path) } catch { return 'ERR:load' }
+    $px = $i.GetPixel([int]($i.Width / 2), [int]($i.Height - 5))
+    $i.Dispose(); return "$($px.R),$($px.G),$($px.B)"
+}
+# The button glyphs are owner-drawn now, so the window text is empty: prove ink exists.
+function Ink($path, $b) {
+    if (-not $path -or -not (Test-Path -LiteralPath $path)) { return -1 }
+    try { $i = [System.Drawing.Bitmap]::FromFile($path) } catch { return -1 }
+    $bg = $i.GetPixel([int]($i.Width / 2), [int]($i.Height - 5))
+    $x0 = [int]($b.X - $rect.Left); $y0 = [int]($b.Y - $rect.Top)
+    $n = 0
+    for ($x = $x0 + 2; $x -lt $x0 + $b.W - 2; $x++) {
+        for ($y = $y0 + 2; $y -lt $y0 + $b.H - 2; $y++) {
+            if ($x -lt 0 -or $y -lt 0 -or $x -ge $i.Width -or $y -ge $i.Height) { continue }
+            $p = $i.GetPixel($x, $y)
+            if (([Math]::Abs($p.R - $bg.R) + [Math]::Abs($p.G - $bg.G) + [Math]::Abs($p.B - $bg.B)) -gt 60) { $n++ }
+        }
+    }
+    $i.Dispose(); return $n
+}
 
 $focused = $false
 if ($hwnd -ne [IntPtr]::Zero) { $focused = [BT]::Focus($hwnd) }
@@ -350,22 +291,23 @@ $anim = DiffWin $a1 $a2
 $cornerA = Corner $a1
 Assert 'animation runs' ($anim -gt 0) "$anim% pixels changed"
 
-# Click the pause button instead of wrestling with keyboard focus: deterministic,
+# Press the pause button instead of wrestling with keyboard focus: deterministic,
 # and it exercises the button the user actually has to press.
 $pauseDiff = 100
 $pauseBtn = if ($bi.Count -ge 2) { @([int]($bi[1].X + $bi[1].W / 2), [int]($bi[1].Y + $bi[1].H / 2)) } else { $null }
+$pauseHwnd = if ($bi.Count -ge 2) { [IntPtr]$bi[1].Hwnd } else { [IntPtr]::Zero }
 Assert 'pause button located' ($null -ne $pauseBtn) $(if ($pauseBtn) { "$($pauseBtn[0]),$($pauseBtn[1])" } else { 'not found' })
 for ($try = 1; $try -le 3 -and $pauseDiff -ne 0; $try++) {
-    if ($pauseBtn) { [BT]::Click($pauseBtn[0], $pauseBtn[1]) }
+    if ($pauseHwnd -ne [IntPtr]::Zero) { [BT]::ClickControl($pauseHwnd) }
     Start-Sleep -Milliseconds 700
     $p1 = Shot 'shot-paused-1'
     Start-Sleep -Milliseconds 1200
     $p2 = Shot 'shot-paused-2'
     $pauseDiff = DiffWin $p1 $p2
     Log "pause attempt $try -> $pauseDiff% pixels changed (gif area only)"
-    if ($pauseDiff -ne 0 -and $pauseBtn) {
-        # move the cursor off the button first so hover highlight cannot pollute the next shot
-        [BT]::Click($pauseBtn[0], $pauseBtn[1]); Start-Sleep -Milliseconds 400
+    if ($pauseDiff -ne 0 -and $pauseHwnd -ne [IntPtr]::Zero) {
+        # it is still moving: press once more to resume before the next attempt
+        [BT]::ClickControl($pauseHwnd); Start-Sleep -Milliseconds 400
     }
 }
 
@@ -374,20 +316,20 @@ $allShots = ($null -ne $a1) -and ($null -ne $a2) -and ($null -ne $p1) -and ($nul
 Log "shots: playing=$([bool]$a1)/$([bool]$a2) paused=$([bool]$p1)/$([bool]$p2)"
 Assert 'screenshots captured' $allShots 'all four shot files exist'
 Assert 'pause holds' ($pauseDiff -eq 0) "$pauseDiff% pixels changed"
-[System.Windows.Forms.SendKeys]::SendWait(' ')
+if ($pauseHwnd -ne [IntPtr]::Zero -and $pauseDiff -eq 0) { [BT]::ClickControl($pauseHwnd) }   # resume
 
 $nextBtn = if ($bi.Count -ge 3) { @([int]($bi[2].X + $bi[2].W / 2), [int]($bi[2].Y + $bi[2].H / 2)) } else { $null }
 Assert 'next button located' ($null -ne $nextBtn) $(if ($nextBtn) { "$($nextBtn[0]),$($nextBtn[1])" } else { 'not found' })
-if ($nextBtn) { [BT]::Click($nextBtn[0], $nextBtn[1]) }
+if ($bi.Count -ge 3) { [BT]::ClickControl([IntPtr]$bi[2].Hwnd) }
 Start-Sleep -Milliseconds 900
 $s1 = Shot 'shot-switched'
 $cornerB = Corner $s1
 Assert 'switch changes gif' ($cornerA -ne $cornerB) "$cornerA -> $cornerB"
 
-# minimise button (index 4 of 6: prev, play, next, add, min, hide)
-if ($bi.Count -ge 6) {
-    $minBtn = @([int]($bi[4].X + $bi[4].W / 2), [int]($bi[4].Y + $bi[4].H / 2))
-    [BT]::Click($minBtn[0], $minBtn[1])
+# minimise button (index 6 of 8: prev, play, next, kitty, peaks, add, min, hide)
+if ($bi.Count -ge 8) {
+    $minBtn = @([int]($bi[6].X + $bi[6].W / 2), [int]($bi[6].Y + $bi[6].H / 2))
+    [BT]::ClickControl([IntPtr]$bi[6].Hwnd)
     Start-Sleep -Milliseconds 900
     $iconic = [BT]::IsIconic($hwnd)
     $stillVisible = [BT]::IsWindowVisible($hwnd)
@@ -400,6 +342,26 @@ if ($bi.Count -ge 6) {
     Assert 'minimize button minimizes' $false "only $($bi.Count) buttons found"
 }
 
+# ---- 5b. themes: the bow and peaks buttons pin and flip the palette ----------
+# Click the bow first: the persisted theme is whatever the last run left, so the
+# assertion must not depend on it (the user-flow test owns the fresh-config case).
+$inkShot = Shot 'shot-theme-first'
+$ink = @($bi | ForEach-Object { Ink $inkShot $_ })
+Assert 'every button drew its glyph' (($ink | Where-Object { $_ -lt 6 }).Count -eq 0) ($ink -join ',')
+if ($bi.Count -ge 8) { [BT]::ClickControl([IntPtr]$bi[3].Hwnd) }   # the bow button
+Start-Sleep -Milliseconds 600
+$themeShot = Shot 'shot-theme-kitty'
+$barKitty = Bar-Pixel $themeShot
+Assert 'bow button shows the hello kitty theme' ($barKitty -eq '253,237,240') "bar $barKitty"
+if ($bi.Count -ge 8) { [BT]::ClickControl([IntPtr]$bi[4].Hwnd) }   # the peaks button
+Start-Sleep -Milliseconds 600
+$themeShotPeaks = Shot 'shot-theme-peaks'
+$barPeaks = Bar-Pixel $themeShotPeaks
+Assert 'peaks button switches the theme' ($barPeaks -eq '51,47,47') "bar $barPeaks"
+if ($bi.Count -ge 8) { [BT]::ClickControl([IntPtr]$bi[3].Hwnd) }   # leave it on hello kitty
+Start-Sleep -Milliseconds 400
+Assert 'bow button switches back' ((Bar-Pixel (Shot 'shot-theme-back')) -eq '253,237,240') 'back to kitty'
+
 if (Test-Path -LiteralPath $errLog) {
     $errText = (Get-Content -LiteralPath $errLog -Raw)
     Post 'error.log' $errText
@@ -409,11 +371,11 @@ if (Test-Path -LiteralPath $errLog) {
 }
 
 # ---- 6. leave nothing running -------------------------------------------------
-Stop-Process -Id $appPid -Force -ErrorAction SilentlyContinue
+Stop-Process -Id $(if ($appPid2 -gt 0) { $appPid2 } else { $appPid }) -Force -ErrorAction SilentlyContinue
 Start-Sleep -Milliseconds 500
 $gone = [BT]::FindApp([ref]$appPid2, [ref]$rect, [ref]$vis)
 Assert 'cleaned up' ($gone -eq [IntPtr]::Zero) ''
 
-foreach ($f in @($a1,$a2,$p1,$p2,$s1)) { Up $f (Split-Path -Leaf $f) }
+foreach ($f in @($a1,$a2,$p1,$p2,$s1,$themeShot,$themeShotPeaks)) { Up $f (Split-Path -Leaf $f) }
 Upload-Results
 Log '=== done ==='

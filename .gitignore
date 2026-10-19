@@ -1,0 +1,8 @@
+# runtime output, never source
+uploads/
+server.log
+serve/cmd.txt
+drop/
+*.zip
+*.exe
+README-pipeline.md.bak
